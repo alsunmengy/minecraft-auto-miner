@@ -45,6 +45,9 @@ public class AutoMinerMod implements ClientModInitializer {
     private static boolean busy = false;
     private static final int LLM_INTERVAL_TICKS = 60;
     private static String availableSchematics = "";
+    private static String lastActionResult = "";
+    private static String lastInstruction = "";
+    private static boolean wasBusy = false;
 
     @Override
     public void onInitializeClient() {
@@ -82,8 +85,25 @@ public class AutoMinerMod implements ClientModInitializer {
 
             if (!autoMode) return;
 
-            // Track busy state — check if any subsystem is still working
-            busy = pathfinder.isActive() || blockBreaker.isBreaking();
+            // Track busy state and detect when an action completes
+            boolean isBusy = pathfinder.isActive() || blockBreaker.isBreaking();
+            if (wasBusy && !isBusy && !lastInstruction.isEmpty()) {
+                // Action just completed!
+                if (lastInstruction.startsWith("MOVE_TO:")) {
+                    lastActionResult = "✓ 到达目标位置";
+                } else if (lastInstruction.startsWith("MINE:")) {
+                    lastActionResult = "✓ 方块已挖掘";
+                } else if (lastInstruction.startsWith("PLACE:")) {
+                    lastActionResult = "✓ 方块已放置";
+                } else if (lastInstruction.startsWith("CHAT:")) {
+                    lastActionResult = "✓ 命令已发送";
+                } else {
+                    lastActionResult = "✓ 动作完成";
+                }
+                LOGGER.info("Action completed: {}", lastActionResult);
+            }
+            busy = isBusy;
+            wasBusy = isBusy;
 
             // Only call LLM when NOT busy and cooldown expired
             if (busy) {
@@ -227,18 +247,23 @@ public class AutoMinerMod implements ClientModInitializer {
         }
         String invSummary = inventoryManager.getInventorySummary(client);
         String schemInfo = availableSchematics.isEmpty() ? "" : " | Schematics: " + availableSchematics;
+        String resultInfo = lastActionResult.isEmpty() ? "" : " | 上次动作: " + lastActionResult;
 
-        return String.format(
+        String report = String.format(
                 "Position: %.1f %.1f %.1f | Health: %.0f/%d | Hunger: %d/%d | " +
-                        "Dimension: %s | Held: %s%s | Task: %s | %s%s",
+                        "Dimension: %s | Held: %s%s | Task: %s | %s%s%s",
                 player.getX(), player.getY(), player.getZ(),
                 player.getHealth(), (int) player.getMaxHealth(),
                 player.getHungerManager().getFoodLevel(), 20,
                 player.getWorld().getDimensionEntry().getIdAsString(),
                 heldItem, durability,
                 currentTask.isEmpty() ? "none" : currentTask,
-                invSummary, schemInfo
+                invSummary, schemInfo, resultInfo
         );
+
+        // Clear the result so it only appears once
+        lastActionResult = "";
+        return report;
     }
 
     /**
@@ -246,6 +271,7 @@ public class AutoMinerMod implements ClientModInitializer {
      */
     private void executeInstruction(MinecraftClient client, String instruction) {
         instruction = instruction.trim();
+        lastInstruction = instruction;
         if (instruction.startsWith("MOVE_TO:")) {
             String[] parts = instruction.substring(8).split(",");
             if (parts.length >= 3) {
