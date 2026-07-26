@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -160,7 +161,7 @@ public class AutoMinerMod implements ClientModInitializer {
                                 handleCommand(MinecraftClient.getInstance(), "start");
                                 return 1;
                             })
-                            .then(ClientCommandManager.argument("blueprint", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                            .then(ClientCommandManager.argument("blueprint", com.mojang.brigadier.arguments.StringArgumentType.string())
                                     .suggests(schematicProvider)
                                     .executes(context -> {
                                         String bp = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "blueprint");
@@ -187,7 +188,7 @@ public class AutoMinerMod implements ClientModInitializer {
                             })
                     )
                     .then(ClientCommandManager.literal("choose")
-                            .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                            .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.string())
                                     .suggests(schematicProvider)
                                     .executes(context -> {
                                         String name = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name");
@@ -308,7 +309,7 @@ public class AutoMinerMod implements ClientModInitializer {
     private String buildStateReport(MinecraftClient client) {
         var player = client.player;
         var heldStack = player.getMainHandStack();
-        String heldItem = heldStack.isEmpty() ? "empty" : heldStack.getItem().getName().getString();
+        String heldItem = heldStack.isEmpty() ? "empty" : Registries.ITEM.getId(heldStack.getItem()).getPath();
         String durability = "";
         if (!heldStack.isEmpty() && heldStack.isDamageable()) {
             int maxDmg = heldStack.getMaxDamage();
