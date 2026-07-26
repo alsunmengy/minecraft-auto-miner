@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import com.nous.autominer.network.LLMClient;
 import com.nous.autominer.player.PlayerController;
@@ -135,6 +136,20 @@ public class AutoMinerMod implements ClientModInitializer {
 
         // Register /am as a proper client-side command
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            SuggestionProvider<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> schematicProvider =
+                    (context, builder) -> {
+                        MinecraftClient mc = MinecraftClient.getInstance();
+                        if (mc == null || mc.runDirectory == null) return builder.buildFuture();
+                        File dir = new File(mc.runDirectory, "schematics");
+                        String[] files = dir.list((d, name) -> name.endsWith(".litematic"));
+                        if (files != null) {
+                            for (String f : files) {
+                                builder.suggest(f);
+                            }
+                        }
+                        return builder.buildFuture();
+                    };
+
             dispatcher.register(ClientCommandManager.literal("am")
                     .executes(context -> {
                         context.getSource().sendFeedback(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <蓝图> | task <描述>"));
@@ -146,6 +161,7 @@ public class AutoMinerMod implements ClientModInitializer {
                                 return 1;
                             })
                             .then(ClientCommandManager.argument("blueprint", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .suggests(schematicProvider)
                                     .executes(context -> {
                                         String bp = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "blueprint");
                                         handleCommand(MinecraftClient.getInstance(), "start " + bp);
@@ -172,6 +188,7 @@ public class AutoMinerMod implements ClientModInitializer {
                     )
                     .then(ClientCommandManager.literal("choose")
                             .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .suggests(schematicProvider)
                                     .executes(context -> {
                                         String name = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name");
                                         handleCommand(MinecraftClient.getInstance(), "choose " + name);
