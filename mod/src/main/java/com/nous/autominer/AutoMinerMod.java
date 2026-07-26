@@ -145,7 +145,8 @@ public class AutoMinerMod implements ClientModInitializer {
                         String[] files = dir.list((d, name) -> name.endsWith(".litematic"));
                         if (files != null) {
                             for (String f : files) {
-                                builder.suggest(f);
+                                // Append space to mark argument as complete for Enter key
+                                builder.suggest(f + " ");
                             }
                         }
                         return builder.buildFuture();
@@ -161,7 +162,7 @@ public class AutoMinerMod implements ClientModInitializer {
                                 handleCommand(MinecraftClient.getInstance(), "start");
                                 return 1;
                             })
-                            .then(ClientCommandManager.argument("blueprint", com.mojang.brigadier.arguments.StringArgumentType.string())
+                            .then(ClientCommandManager.argument("blueprint", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
                                     .suggests(schematicProvider)
                                     .executes(context -> {
                                         String bp = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "blueprint");
@@ -188,7 +189,7 @@ public class AutoMinerMod implements ClientModInitializer {
                             })
                     )
                     .then(ClientCommandManager.literal("choose")
-                            .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.string())
+                            .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
                                     .suggests(schematicProvider)
                                     .executes(context -> {
                                         String name = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name");
