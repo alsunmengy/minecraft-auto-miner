@@ -75,12 +75,7 @@ public class AutoMinerMod implements ClientModInitializer {
         LOGGER.info("Auto Miner initialized. LLM: {} at {}", model, apiUrl);
 
         // Cache schematics list
-        String mcRunDir = MinecraftClient.getInstance().runDirectory.getAbsolutePath();
-        List<String> schematics = SchematicReader.scanSchematicsDir(mcRunDir + "/schematics");
-        if (!schematics.isEmpty()) {
-            availableSchematics = String.join(", ", schematics);
-            LOGGER.info("Found schematics: {}", availableSchematics);
-        }
+        scanSchematics(MinecraftClient.getInstance());
 
         // Main tick — monitors busy state and calls LLM when idle
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -231,15 +226,17 @@ public class AutoMinerMod implements ClientModInitializer {
             String status = autoMode ? "§a运行中" : "§c已停止";
             String task = currentTask.isEmpty() ? "无" : currentTask;
             String llmOk = llmClient.isConfigured() ? "§a已配置" : "§c未配置Key";
-            String sChems = availableSchematics.isEmpty() ? "无" : availableSchematics;
+            String sChems = String.join(", ", scanSchematics(client));
+            if (sChems.isEmpty()) sChems = "无";
             client.player.sendMessage(Text.literal(String.format(
                     "§e[AutoMiner] §f状态: %s | 任务: %s | LLM: %s | 模型: %s | 蓝图: %s",
                     status, task, llmOk, llmClient.getModel(), sChems)), false);
         } else if (args.equals("schematics")) {
-            if (availableSchematics.isEmpty()) {
+            List<String> schematics = scanSchematics(client);
+            if (schematics.isEmpty()) {
                 client.player.sendMessage(Text.literal("§e[AutoMiner] §f没有找到 .litematic 蓝图文件"), false);
             } else {
-                client.player.sendMessage(Text.literal("§e[AutoMiner] §f可用蓝图: " + availableSchematics), false);
+                client.player.sendMessage(Text.literal("§e[AutoMiner] §f可用蓝图: " + String.join("§7, §f", schematics)), false);
             }
         } else if (args.startsWith("choose ")) {
             // /am choose <blueprint_name> — show material list for a blueprint
@@ -262,6 +259,16 @@ public class AutoMinerMod implements ClientModInitializer {
         } else {
             client.player.sendMessage(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <蓝图> | task <描述>"), false);
         }
+    }
+
+    /**
+     * Scan the schematics directory for .litematic files and update cache.
+     */
+    private List<String> scanSchematics(MinecraftClient client) {
+        File schematicsDir = new File(client.runDirectory, "schematics");
+        List<String> schematics = SchematicReader.scanSchematicsDir(schematicsDir.getAbsolutePath());
+        availableSchematics = String.join(", ", schematics);
+        return schematics;
     }
 
     /**
