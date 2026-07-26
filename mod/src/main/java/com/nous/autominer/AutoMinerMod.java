@@ -3,6 +3,7 @@ package com.nous.autominer;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import org.slf4j.Logger;
@@ -107,18 +108,24 @@ public class AutoMinerMod implements ClientModInitializer {
             }
         });
 
-        // Listen for chat messages
+        // Listen for server chat messages (teleport confirmations, errors, etc.)
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             if (chatHandler != null) {
                 chatHandler.onChatMessage(message.getString());
             }
+        });
 
-            // Handle /am commands from the player's own chat
-            MinecraftClient mc = MinecraftClient.getInstance();
-            String raw = message.getString();
-            if (mc.player != null && raw.startsWith("/am ")) {
-                handleCommand(mc, raw.substring(4).trim());
+        // Intercept chat BEFORE it reaches the server — handle /am commands locally
+        ClientSendMessageEvents.ALLOW_CHAT.register((message) -> {
+            if (message.startsWith("/am ")) {
+                handleCommand(MinecraftClient.getInstance(), message.substring(4).trim());
+                return false; // Cancel sending to server
+            } else if (message.equals("/am") || message.equals("/am ")) {
+                MinecraftClient.getInstance().player.sendMessage(
+                        Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <蓝图> | task <描述>"), false);
+                return false;
             }
+            return true; // Allow other messages to be sent
         });
     }
 
