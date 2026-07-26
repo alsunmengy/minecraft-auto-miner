@@ -9,18 +9,30 @@
 ┌─────────────────────────────┐     HTTPS        ┌──────────────────┐
 │ Fabric Mod                  │ ───────────────►  │ DeepSeek / MiMo  │
 │                             │                   │                  │
-│ 每 0.5 秒: 读取状态 →       │                   │  返回下一条指令   │
-│ 调用 LLM → 执行指令          │ ◄────────────────  │                  │
+│  空闲时: 读取状态 →         │                   │  返回下一条指令   │
+│  调用 LLM → 执行指令        │ ◄────────────────  │                  │
 └─────────────────────────────┘                   └──────────────────┘
 ```
 
-Mod 每 10 tick (0.5 秒) 向 LLM 发送当前状态（坐标、血量、饥饿、手持物品耐久、背包物品），LLM 返回一条指令，Mod 执行。
+Mod 在空闲时（不在走路、不在挖矿）每 3 秒向 LLM 询问下一步。LLM 返回一条指令，Mod 执行。
 
 ## 安装
 
 1. **下载**: 从 [Releases](https://github.com/alsunmengy/minecraft-auto-miner/releases) 下载最新 `.jar`
 2. **放入**: 复制到 `.minecraft/mods/` 文件夹
 3. **启动**: 确保已安装 Fabric Loader 0.19.3+ 和 Fabric API
+
+## 游戏内命令
+
+进游戏后在聊天栏输入：
+
+| 命令 | 作用 |
+|------|------|
+| `/am start` | 启动自动化 |
+| `/am stop` | 停止自动化 |
+| `/am status` | 查看运行状态、当前任务、LLM 配置 |
+| `/am task <描述>` | 设置当前任务，如 `/am task 挖10个铁矿` |
+| `/am schematics` | 列出可用蓝图 |
 
 ## 配置
 
@@ -30,8 +42,8 @@ Mod 每 10 tick (0.5 秒) 向 LLM 发送当前状态（坐标、血量、饥饿�
 # 必填 — 你的 API Key
 LLM_API_KEY=sk-your-key-here
 
-# 模型 (默认 deepseek-chat)
-LLM_MODEL=deepseek-chat
+# 模型 (默认 deepseek-v4-flash)
+LLM_MODEL=deepseek-v4-flash
 
 # API 地址 (默认 DeepSeek)
 LLM_API_URL=https://api.deepseek.com/v1/chat/completions
@@ -40,21 +52,15 @@ LLM_API_URL=https://api.deepseek.com/v1/chat/completions
 在 HMCL/PCL 等启动器中，在「版本设置」→「自定义参数」或「JVM 参数」中添加：
 
 ```
--DLLM_API_KEY=sk-your-key -DLLM_MODEL=deepseek-chat
-```
-
-或在启动命令前 export：
-
-```bash
-LLM_API_KEY=sk-xxx LLM_MODEL=deepseek-chat java -jar ...
+-DLLM_API_KEY=sk-your-key -DLLM_MODEL=deepseek-v4-flash
 ```
 
 ### 支持的模型
 
-| 模型 | API URL | 推荐 |
+| 模型 | API URL | 说明 |
 |------|---------|------|
-| DeepSeek Chat | `https://api.deepseek.com/v1/chat/completions` | ✅ 默认 |
-| DeepSeek Reasoner | `https://api.deepseek.com/v1/chat/completions` | 复杂决策 |
+| DeepSeek V4 Flash | `https://api.deepseek.com/v1/chat/completions` | ✅ 默认，快速便宜 |
+| DeepSeek Reasoner | `https://api.deepseek.com/v1/chat/completions` | 复杂决策场景 |
 | MiMo | `https://api.mimo.com/v1` | 备用 |
 | 任何 OpenAI 兼容 API | 你的 API 地址 | 通用 |
 
@@ -96,6 +102,8 @@ LLM 的 System Prompt 指导五阶段发展：
 - `/cd` — 打开服务器面板
 - `/tpa <player>` — 请求传送到玩家
 
+发送传送命令后自动等待 2 秒让服务器响应。
+
 ## 蓝图 (Litematica)
 
 将 `.litematic` 文件放入 `.minecraft/schematics/` 目录，LLM 可：
@@ -110,7 +118,7 @@ LLM 的 System Prompt 指导五阶段发展：
 # 环境要求: JDK 21+, Gradle 8.10+
 cd mod
 ./gradlew build
-# 产物: build/libs/auto-miner-0.3.0.jar
+# 产物: build/libs/auto-miner-0.3.1.jar
 ```
 
 ## 文件结构
@@ -136,10 +144,30 @@ mod/src/main/java/com/nous/autominer/
 ## 常见问题
 
 **Q: 启动时崩溃 "Incompatible mods found"**
-A: 确保下载的是最新版本，检查 fabric.mod.json 中声明为 `minecraft: 1.21.11` + `fabricloader: >=0.19.3`
+A: 确保下载的是最新版本 v0.3.1+，fabric.mod.json 中声明为 `minecraft: 1.21.11` + `fabricloader: >=0.19.3`
 
 **Q: Mod 不执行任何操作**
-A: 检查环境变量 `LLM_API_KEY` 是否设置正确，查看游戏日志是否有 "Auto Miner initialized"
+A: 输入 `/am status` 检查状态。确认环境变量 `LLM_API_KEY` 已设置，游戏日志应有 "Auto Miner initialized"
 
 **Q: 如何提交错误报告？**
 A: 将 `.minecraft/crash-reports/` 或启动器导出的崩溃 zip 文件提交到 GitHub Issues
+
+## 更新日志
+
+### v0.3.1 (2026-07-26)
+- 🔑 移除按键绑定（U键不兼容1.21.11），改用 `/am` 命令
+- 🆕 默认模型改为 `deepseek-v4-flash`
+- ⏱ LLM 请求改为动作完成后+3秒冷却
+- 📦 状态报告新增工具耐久 + 背包摘要
+
+### v0.3.0 (2026-07-26)
+- 📐 SchematicReader 解析 .litematic 蓝图
+- 🔧 工具耐久监控
+- 🆕 CRAFT/BUILD/LIST_SCHEMATICS 指令
+- 🎯 LLM prompt 更新为五阶段发展流水线
+
+### v0.2.0 (2026-07-26)
+- 修复 fabric.mod.json 声明 1.21.11 + loader >=0.19.3
+
+### v0.1.0 (2026-07-26)
+- 初始版本，声明 minecraft 1.21.1（与 1.21.11 不兼容）
