@@ -14,6 +14,10 @@ import com.nous.autominer.player.BlockPlacer;
 import com.nous.autominer.player.Pathfinder;
 import com.nous.autominer.chat.ChatCommandHandler;
 import com.nous.autominer.inventory.InventoryManager;
+import com.nous.autominer.schematic.SchematicReader;
+
+import java.io.File;
+import java.util.List;
 
 /**
  * Auto Miner — AI-powered Minecraft automation mod.
@@ -108,15 +112,27 @@ public class AutoMinerMod implements ClientModInitializer {
      */
     private String buildStateReport(MinecraftClient client) {
         var player = client.player;
+        var heldStack = player.getMainHandStack();
+        String heldItem = heldStack.isEmpty() ? "empty" : heldStack.getItem().getName().getString();
+        String durability = "";
+        if (!heldStack.isEmpty() && heldStack.isDamageable()) {
+            int maxDmg = heldStack.getMaxDamage();
+            int curDmg = maxDmg - heldStack.getDamage();
+            durability = String.format(" | Tool耐久: %d/%d (%.0f%%)", curDmg, maxDmg, 100.0 * curDmg / maxDmg);
+        }
+        // Add inventory summary
+        String invSummary = inventoryManager.getInventorySummary(client);
+
         return String.format(
                 "Position: %.1f %.1f %.1f | Health: %.0f/%d | Hunger: %d/%d | " +
-                        "Dimension: %s | Held: %s | Task: %s",
+                        "Dimension: %s | Held: %s%s | Task: %s | %s",
                 player.getX(), player.getY(), player.getZ(),
                 player.getHealth(), (int) player.getMaxHealth(),
                 player.getHungerManager().getFoodLevel(), 20,
                 player.getWorld().getDimensionEntry().getIdAsString(),
-                player.getMainHandStack().getItem().getName().getString(),
-                currentTask.isEmpty() ? "none" : currentTask
+                heldItem, durability,
+                currentTask.isEmpty() ? "none" : currentTask,
+                invSummary
         );
     }
 
@@ -182,6 +198,26 @@ public class AutoMinerMod implements ClientModInitializer {
         } else if (instruction.startsWith("CHAT:")) {
             String message = instruction.substring(5).trim();
             chatHandler.sendChat(client, message);
+        } else if (instruction.startsWith("CRAFT:")) {
+            String recipe = instruction.substring(6).trim();
+            LOGGER.info("LLM wants to craft: {}", recipe);
+            // Crafting in survival server is done via chat: /craft <item> or manual
+            chatHandler.sendChat(client, "/craft " + recipe);
+        } else if (instruction.startsWith("BUILD:")) {
+            String schematic = instruction.substring(6).trim();
+            LOGGER.info("LLM wants to build schematic: {}", schematic);
+            // Load and report the schematic materials to the LLM on next tick
+            currentTask = "Building: " + schematic;
+            // The LLM will need to gather materials first, then place blocks
+            // Actual block-by-block building to be implemented
+        } else if (instruction.startsWith("LIST_SCHEMATICS")) {
+            File schematicsDir = new File(client.runDirectory, "schematics");
+            List<String> schematics = SchematicReader.scanSchematicsDir(schematicsDir.getAbsolutePath());
+            if (schematics.isEmpty()) {
+                LOGGER.info("No .litematic files found in schematics/");
+            } else {
+                LOGGER.info("Available schematics: {}", String.join(", ", schematics));
+            }
         } else if (instruction.startsWith("LOOK_AT:")) {
             String[] parts = instruction.substring(8).split(",");
             if (parts.length >= 3) {
