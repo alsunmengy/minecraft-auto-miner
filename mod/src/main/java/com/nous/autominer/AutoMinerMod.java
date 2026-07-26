@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import com.nous.autominer.network.LLMClient;
 import com.nous.autominer.player.PlayerController;
@@ -52,6 +53,7 @@ public class AutoMinerMod implements ClientModInitializer {
     private static String lastActionResult = "";
     private static String lastInstruction = "";
     private static boolean wasBusy = false;
+    private static String selectedSchematic = "";
 
     @Override
     public void onInitializeClient() {
@@ -136,6 +138,20 @@ public class AutoMinerMod implements ClientModInitializer {
 
         // Register /am as a proper client-side command
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            SuggestionProvider<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> schemProvider =
+                    (context, builder) -> {
+                        MinecraftClient mc = MinecraftClient.getInstance();
+                        if (mc == null || mc.runDirectory == null) return builder.buildFuture();
+                        File dir = new File(mc.runDirectory, "schematics");
+                        String[] files = dir.list((d, name) -> name.endsWith(".litematic"));
+                        if (files != null) {
+                            for (String f : files) {
+                                builder.suggest(f);
+                            }
+                        }
+                        return builder.buildFuture();
+                    };
+
             dispatcher.register(ClientCommandManager.literal("am")
                     .executes(context -> {
                         context.getSource().sendFeedback(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <蓝图> | task <描述>"));
@@ -147,6 +163,7 @@ public class AutoMinerMod implements ClientModInitializer {
                                 return 1;
                             })
                             .then(ClientCommandManager.argument("blueprint", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .suggests(schemProvider)
                                     .executes(context -> {
                                         String bp = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "blueprint");
                                         handleCommand(MinecraftClient.getInstance(), "start " + bp);
@@ -173,6 +190,7 @@ public class AutoMinerMod implements ClientModInitializer {
                     )
                     .then(ClientCommandManager.literal("choose")
                             .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .suggests(schemProvider)
                                     .executes(context -> {
                                         String name = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name");
                                         handleCommand(MinecraftClient.getInstance(), "choose " + name);
@@ -237,28 +255,96 @@ public class AutoMinerMod implements ClientModInitializer {
             if (schematics.isEmpty()) {
                 client.player.sendMessage(Text.literal("§e[AutoMiner] §f没有找到 .litematic 蓝图文件"), false);
             } else {
-                client.player.sendMessage(Text.literal("§e[AutoMiner] §f可用蓝图: " + String.join("§7, §f", schematics)), false);
+                client.player.sendMessage(Text.literal("§e[AutoMiner] §f可用蓝图(输入编号或全名):"), false);
+                for (int i = 0; i < schematics.size(); i++) {
+                    String marker = schematics.get(i).equals(selectedSchematic) ? " §a← 已选" : "";
+                    client.player.sendMessage(Text.literal("§7  " + (i + 1) + ". §f" + schematics.get(i) + marker), false);
+                }
             }
         } else if (args.startsWith("choose ")) {
-            // /am choose <blueprint_name> — show material list for a blueprint
-            String name = args.substring(7).trim();
+            String input = args.substring(7).trim();
+            List<String> schematics = scanSchematics(client);
+            String targetName = null;
+
+            // Check if input is a number
+            try {
+                int idx = Integer.parseInt(input) - 1;
+                if (idx >= 0 && idx < schematics.size()) {
+                    targetName = schematics.get(idx);
+                } else {
+                    client.player.sendMessage(Text.literal("§c[AutoMiner] §f编号超出范围(1-" + schematics.size() + ")"), false);
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                // Not a number, treat as filename
+                targetName = input;
+            }
+
+            if (targetName == null) return;
             File schematicsDir = new File(client.runDirectory, "schematics");
             SchematicReader reader = new SchematicReader();
-            if (reader.load(schematicsDir.getAbsolutePath() + "/" + name.trim())) {
-                client.player.sendMessage(Text.literal("§e[AutoMiner] §f蓝图: " + reader.getName() + " (" + reader.getSize()[0] + "x" + reader.getSize()[1] + "x" + reader.getSize()[2] + ", " + reader.getTotalBlocks() + " 方块)"), false);
+            if (reader.load(schematicsDir.getAbsolutePath() + "/" + targetName)) {
+                selectedSchematic = targetName;
+                client.player.sendMessage(Text.literal("§a[AutoMiner] §f已选择蓝图: " + targetName), false);
+                client.player.sendMessage(Text.literal("§e  名称: " + reader.getName()), false);
+                client.player.sendMessage(Text.literal("§e  尺寸: " + reader.getSize()[0] + "x" + reader.getSize()[1] + "x" + reader.getSize()[2] + ", " + reader.getTotalBlocks() + " 方块"), false);
                 String materials = reader.getMaterialSummary();
-                // Send material summary in chunks if too long
                 for (String line : materials.split("\n")) {
                     client.player.sendMessage(Text.literal("§7  " + line), false);
                 }
+                client.player.sendMessage(Text.literal("§a  输入 §f/am start §a开始建造"), false);
             } else {
-                client.player.sendMessage(Text.literal("§c[AutoMiner] §f无法加载蓝图: " + name), false);
+                client.player.sendMessage(Text.literal("§c[AutoMiner] §f无法加载蓝图: " + targetName), false);
             }
+        } else if (args.equals("start") || args.equals("on")) {
+            autoMode = true;
+            busy = false;
+            llmCooldown = 0;
+            String task;
+            if (!selectedSchematic.isEmpty()) {
+                task = "Build: " + selectedSchematic;
+                client.player.sendMessage(Text.literal("§a[AutoMiner] §f自动化已启动，目标蓝图: " + selectedSchematic), false);
+            } else if (!currentTask.isEmpty()) {
+                task = currentTask;
+                client.player.sendMessage(Text.literal("§a[AutoMiner] §f自动化已启动，任务: " + currentTask), false);
+            } else {
+                task = "";
+                client.player.sendMessage(Text.literal("§a[AutoMiner] §f自动化已启动，当前无指定任务，将自由探索"), false);
+            }
+            currentTask = task;
+            LOGGER.info("Auto mode started. Task: {}", task);
+        } else if (args.startsWith("start ")) {
+            // /am start <blueprint_name> — start with a specific blueprint
+            String name = args.substring(6).trim();
+            selectedSchematic = name;
+            autoMode = true;
+            busy = false;
+            llmCooldown = 0;
+            currentTask = "Build: " + name;
+            client.player.sendMessage(Text.literal("§a[AutoMiner] §f自动化已启动，目标蓝图: " + name), false);
+            LOGGER.info("Auto mode started with blueprint: {}", name);
+        } else if (args.equals("stop") || args.equals("off")) {
+            autoMode = false;
+            pathfinder.stop(client.player);
+            blockBreaker.stop();
+            currentTask = "";
+            client.player.sendMessage(Text.literal("§c[AutoMiner] §f自动化已停止"), false);
+            LOGGER.info("Auto mode stopped via command");
+        } else if (args.equals("status")) {
+            String status = autoMode ? "§a运行中" : "§c已停止";
+            String task = currentTask.isEmpty() ? "无" : currentTask;
+            String llmOk = llmClient.isConfigured() ? "§a已配置" : "§c未配置Key";
+            String sChems = String.join(", ", scanSchematics(client));
+            if (sChems.isEmpty()) sChems = "无";
+            String sel = selectedSchematic.isEmpty() ? "无" : selectedSchematic;
+            client.player.sendMessage(Text.literal(String.format(
+                    "§e[AutoMiner] §f状态: %s | 任务: %s | LLM: %s | 模型: %s | 已选蓝图: %s",
+                    status, task, llmOk, llmClient.getModel(), sel)), false);
         } else if (args.startsWith("task ")) {
             currentTask = args.substring(5).trim();
             client.player.sendMessage(Text.literal("§a[AutoMiner] §f任务已设置: " + currentTask), false);
         } else {
-            client.player.sendMessage(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <蓝图> | task <描述>"), false);
+            client.player.sendMessage(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <编号/蓝图名> | task <描述>"), false);
         }
     }
 
