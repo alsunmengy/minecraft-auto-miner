@@ -50,7 +50,7 @@ public class LLMClient {
             - MOVE_TO:x,y,z — Pathfind to absolute coordinates
             - MINE:x,y,z — Break the block at the given position
             - PLACE:blockId,x,y,z — Place a block at position (e.g. PLACE:crafting_table,100,64,200)
-            - CHAT:/command — Send a chat command (/res tp <name>, /cd, /tpa PlayerName)
+            - CHAT:/command — Send a chat command (/res tp, /cd, /tpa PlayerName)
             - CRAFT:id — Request crafting (CRAFT:crafting_table, CRAFT:wooden_pickaxe)
             - LIST_SCHEMATICS — List available .litematic files
             - TASK:description — Set a new current task
@@ -58,7 +58,7 @@ public class LLMClient {
             - STOP — Stop automation
 
             Tool durability: use the durability info provided. If below 20%, find a way to craft replacement.
-            Teleport: /res tp <name> — teleport to your land/residence.
+            Teleport: /res tp — teleport to your land/residence.
             /cd — server panel, /tpa <player> — request teleport.
             After teleport, WAIT:40 (2 seconds) for server response.
 
