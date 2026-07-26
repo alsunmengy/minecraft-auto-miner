@@ -1,13 +1,16 @@
 package com.nous.autominer;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.mojang.brigadier.CommandDispatcher;
 
 import com.nous.autominer.network.LLMClient;
 import com.nous.autominer.player.PlayerController;
@@ -135,17 +138,60 @@ public class AutoMinerMod implements ClientModInitializer {
             }
         });
 
-        // Intercept chat BEFORE it reaches the server — handle /am commands locally
-        ClientSendMessageEvents.ALLOW_CHAT.register((message) -> {
-            if (message.startsWith("/am ")) {
-                handleCommand(MinecraftClient.getInstance(), message.substring(4).trim());
-                return false; // Cancel sending to server
-            } else if (message.equals("/am") || message.equals("/am ")) {
-                MinecraftClient.getInstance().player.sendMessage(
-                        Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <蓝图> | task <描述>"), false);
-                return false;
-            }
-            return true; // Allow other messages to be sent
+        // Register /am as a proper client-side command
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            dispatcher.register(ClientCommandManager.literal("am")
+                    .executes(context -> {
+                        context.getSource().sendFeedback(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <蓝图> | task <描述>"));
+                        return 1;
+                    })
+                    .then(ClientCommandManager.literal("start")
+                            .executes(context -> {
+                                handleCommand(MinecraftClient.getInstance(), "start");
+                                return 1;
+                            })
+                            .then(ClientCommandManager.argument("blueprint", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .executes(context -> {
+                                        String bp = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "blueprint");
+                                        handleCommand(MinecraftClient.getInstance(), "start " + bp);
+                                        return 1;
+                                    }))
+                    )
+                    .then(ClientCommandManager.literal("stop")
+                            .executes(context -> {
+                                handleCommand(MinecraftClient.getInstance(), "stop");
+                                return 1;
+                            })
+                    )
+                    .then(ClientCommandManager.literal("status")
+                            .executes(context -> {
+                                handleCommand(MinecraftClient.getInstance(), "status");
+                                return 1;
+                            })
+                    )
+                    .then(ClientCommandManager.literal("schematics")
+                            .executes(context -> {
+                                handleCommand(MinecraftClient.getInstance(), "schematics");
+                                return 1;
+                            })
+                    )
+                    .then(ClientCommandManager.literal("choose")
+                            .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .executes(context -> {
+                                        String name = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name");
+                                        handleCommand(MinecraftClient.getInstance(), "choose " + name);
+                                        return 1;
+                                    }))
+                    )
+                    .then(ClientCommandManager.literal("task")
+                            .then(ClientCommandManager.argument("description", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .executes(context -> {
+                                        String desc = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "description");
+                                        handleCommand(MinecraftClient.getInstance(), "task " + desc);
+                                        return 1;
+                                    }))
+                    )
+            );
         });
     }
 
