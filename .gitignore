@@ -22,3 +22,10 @@ run/
 
 # Temp
 /tmp/
+
+# Build artifacts
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Backups
+*.bak
