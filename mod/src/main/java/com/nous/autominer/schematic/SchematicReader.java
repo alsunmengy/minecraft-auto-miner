@@ -1,8 +1,9 @@
 package com.nous.autominer.schematic;
 
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtLongArray;
+import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
@@ -10,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 
@@ -49,8 +49,8 @@ public class SchematicReader {
             return false;
         }
 
-        try (FileInputStream fis = new FileInputStream(file)) {
-            NbtCompound root = NbtIo.readCompressed(fis);
+        try {
+            NbtCompound root = NbtIo.readCompressed(file.toPath(), NbtSizeTracker.ofUnlimitedBytes());
 
             // Metadata
             if (root.contains("Metadata")) {
