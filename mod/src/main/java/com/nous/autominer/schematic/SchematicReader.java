@@ -54,10 +54,10 @@ public class SchematicReader {
 
             // Metadata
             if (root.contains("Metadata")) {
-                NbtCompound meta = root.getCompound("Metadata");
-                name = meta.getString("Name");
-                author = meta.getString("Author");
-                description = meta.getString("Description");
+                NbtCompound meta = root.getCompound("Metadata").get();
+                name = meta.getString("Name").get();
+                author = meta.getString("Author").get();
+                description = meta.getString("Description").get();
             }
 
             // Regions
@@ -66,13 +66,13 @@ public class SchematicReader {
                 return false;
             }
 
-            NbtCompound regions = root.getCompound("Regions");
+            NbtCompound regions = root.getCompound("Regions").get();
             // Process the first region
             String firstRegion = regions.getKeys().iterator().next();
-            NbtCompound region = regions.getCompound(firstRegion);
+            NbtCompound region = regions.getCompound(firstRegion).get();
 
             // Size
-            size = region.getIntArray("Size");
+            size = region.getIntArray("Size").get();
             if (size.length < 3) {
                 LOGGER.warn("Invalid size in .litematic");
                 return false;
@@ -80,15 +80,15 @@ public class SchematicReader {
 
             // Position
             if (region.contains("Position")) {
-                position = region.getIntArray("Position");
+                position = region.getIntArray("Position").get();
             }
 
             // Palette — read mappings
             palette = new ArrayList<>();
-            NbtCompound paletteTag = region.getCompound("Palette");
+            NbtCompound paletteTag = region.getCompound("Palette").get();
             for (String blockName : paletteTag.getKeys()) {
                 // The palette maps block_name → index, we need to store it at the right position
-                int index = paletteTag.getInt(blockName);
+                int index = paletteTag.getInt(blockName).get();
                 while (palette.size() <= index) {
                     palette.add(null);
                 }
@@ -96,7 +96,7 @@ public class SchematicReader {
             }
 
             // BlockStates
-            blockStates = region.getLongArray("BlockStates");
+            blockStates = region.getLongArray("BlockStates").get();
 
             loaded = true;
             LOGGER.info("Loaded schematic '{}' by {} ({}x{}x{}, {} unique blocks)",

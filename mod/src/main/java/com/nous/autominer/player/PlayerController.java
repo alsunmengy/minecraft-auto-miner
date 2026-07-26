@@ -66,7 +66,10 @@ public class PlayerController {
             return false;
         }
 
-        double distance = player.getPos().distanceTo(targetPosition);
+        double dx = targetPosition.x - player.getX();
+        double dy = targetPosition.y - player.getY();
+        double dz = targetPosition.z - player.getZ();
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
         if (distance < 1.5) {
             // Arrived
@@ -75,10 +78,12 @@ public class PlayerController {
         }
 
         // Calculate direction and apply movement
-        Vec3d direction = targetPosition.subtract(player.getPos()).normalize();
-        Vec3d velocity = direction.multiply(movementSpeed);
-
-        player.setVelocity(velocity.x, player.getVelocity().y, velocity.z);
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len > 0) {
+            dx = dx / len * movementSpeed;
+            dz = dz / len * movementSpeed;
+        }
+        player.setVelocity(dx, player.getVelocity().y, dz);
 
         // Update look direction
         lookAt(player, targetPosition.x, targetPosition.y, targetPosition.z);

@@ -30,40 +30,40 @@ public class LLMClient {
     // System prompt that defines the mod's capabilities
     private static final String SYSTEM_PROMPT = """
             You are controlling a Minecraft survival automation mod. You receive the player's current
-            state (position, health, hunger, held item with tool durability, current task, and inventory summary)
+            state (position, health, hunger, held item with tool durability, current task, inventory summary,
+            and a list of nearby blocks with their coordinates relative to the player)
             and must respond with ONE action to progress the task.
 
+            NEARBY BLOCKS: The state report ends with "附近方块: ..." showing what blocks are around you.
+            Format: block_type(count,near:dx,dy,dz) — count of that block type and coords of the nearest one.
+            You can see trees (oak_log, birch_log, spruce_log), ores (coal_ore, iron_ore, deepslate_diamond_ore),
+            stone, dirt, grass_block, crafting_table, furnace, chest, etc.
+            Use these relative coordinates to aim your MOVE_TO and MINE commands!
+
             PROGRESSION (fist to diamond):
-            Phase 1 — Wood: Punch trees (MINE) → get logs → CHAT:/craft planks → CHAT:/craft crafting_table
-            Phase 2 — Stone: CHAT:/craft wooden_pickaxe → MINE stone → stone tools
-            Phase 3 — Iron: MINE iron_ore → smelt in furnace → CHAT:/craft iron_pickaxe
-            Phase 4 — Diamond: MINE deepslate_diamond_ore → diamond tools
-            Phase 5 — Build: Gather materials → BUILD:schematic_name
+            Phase 1 — Punch nearby trees (MINE log at near:x,y,z) → craft planks/sticks/crafting_table
+            Phase 2 — Craft wooden_pickaxe at crafting_table → MINE nearby stone → stone tools
+            Phase 3 — Place furnace → MINE iron_ore → smelt → iron tools
+            Phase 4 — Iron pickaxe → MINE deepslate_diamond_ore → diamond tools
 
             Available commands:
-            - MOVE_TO:x,y,z — Pathfind to coordinates
+            - MOVE_TO:x,y,z — Pathfind to absolute coordinates
             - MINE:x,y,z — Break the block at the given position
-            - PLACE:blockId,x,y,z — Place a block at position (e.g. PLACE:oak_planks,100,64,200)
-            - CHAT:/command — Send a chat command (/res tp home, /cd, /tpa PlayerName, /craft item)
-            - CRAFT:item — Request crafting via /craft command
-            - BUILD:schematic_name — Start building a schematic (gather materials then place)
+            - PLACE:blockId,x,y,z — Place a block at position (e.g. PLACE:crafting_table,100,64,200)
+            - CHAT:/command — Send a chat command (/res tp <name>, /cd, /tpa PlayerName)
+            - CRAFT:id — Request crafting (CRAFT:crafting_table, CRAFT:wooden_pickaxe)
             - LIST_SCHEMATICS — List available .litematic files
-            - LOOK_AT:x,y,z — Snap camera to look at coordinates
             - TASK:description — Set a new current task
             - WAIT:ticks — Wait N ticks (20 ticks = 1 second)
             - STOP — Stop automation
 
-            Tool durability: the state report shows your tool durability as "Tool耐久: current/max (%)".
-            If durability drops below 20%, go back to base (CHAT:/res tp home) and craft a replacement
-            before continuing.
+            Tool durability: use the durability info provided. If below 20%, find a way to craft replacement.
+            Teleport: /res tp <name> — teleport to your land/residence.
+            /cd — server panel, /tpa <player> — request teleport.
+            After teleport, WAIT:40 (2 seconds) for server response.
 
-            Teleport: use /res tp home to return to base, /res tp <name> for other locations,
-            /cd to open the server panel, /tpa <player> to request teleport to another player.
-            After sending a teleport command, WAIT:40 (2 seconds) for the server to respond.
-
-            Move step by step. For mining a block, first MOVE_TO then MINE.
-            For building, MOVE_TO the build area then PLACE each block.
-            Use CHAT for server commands, CRAFT for crafting items.
+            IMPORTANT: Use the nearby block coords! If a block shows "near:2,-1,3", do MOVE_TO with
+            player position plus those offsets. Always MOVE_TO before MINE/PLACE.
             Keep responses to a single command line. No explanations.
             """;
 

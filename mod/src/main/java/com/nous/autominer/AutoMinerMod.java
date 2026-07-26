@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.BlockPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,7 @@ import com.nous.autominer.schematic.SchematicReader;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Auto Miner — AI-powered Minecraft automation mod.
@@ -219,87 +221,6 @@ public class AutoMinerMod implements ClientModInitializer {
             autoMode = true;
             busy = false;
             llmCooldown = 0;
-            if (currentTask.isEmpty()) {
-                client.player.sendMessage(Text.literal("§a[AutoMiner] §f自动化已启动，当前无指定任务，将自由探索"), false);
-            } else {
-                client.player.sendMessage(Text.literal("§a[AutoMiner] §f自动化已启动，任务: " + currentTask), false);
-            }
-            LOGGER.info("Auto mode started via command");
-        } else if (args.startsWith("start ")) {
-            // /am start <blueprint_name> — start with a specific blueprint
-            String name = args.substring(6).trim();
-            autoMode = true;
-            busy = false;
-            llmCooldown = 0;
-            currentTask = "Build: " + name;
-            client.player.sendMessage(Text.literal("§a[AutoMiner] §f自动化已启动，目标蓝图: " + name), false);
-            LOGGER.info("Auto mode started with blueprint: {}", name);
-        } else if (args.equals("stop") || args.equals("off")) {
-            autoMode = false;
-            pathfinder.stop(client.player);
-            blockBreaker.stop();
-            currentTask = "";
-            client.player.sendMessage(Text.literal("§c[AutoMiner] §f自动化已停止"), false);
-            LOGGER.info("Auto mode stopped via command");
-        } else if (args.equals("status")) {
-            String status = autoMode ? "§a运行中" : "§c已停止";
-            String task = currentTask.isEmpty() ? "无" : currentTask;
-            String llmOk = llmClient.isConfigured() ? "§a已配置" : "§c未配置Key";
-            String sChems = String.join(", ", scanSchematics(client));
-            if (sChems.isEmpty()) sChems = "无";
-            client.player.sendMessage(Text.literal(String.format(
-                    "§e[AutoMiner] §f状态: %s | 任务: %s | LLM: %s | 模型: %s | 蓝图: %s",
-                    status, task, llmOk, llmClient.getModel(), sChems)), false);
-        } else if (args.equals("schematics")) {
-            List<String> schematics = scanSchematics(client);
-            if (schematics.isEmpty()) {
-                client.player.sendMessage(Text.literal("§e[AutoMiner] §f没有找到 .litematic 蓝图文件"), false);
-            } else {
-                client.player.sendMessage(Text.literal("§e[AutoMiner] §f可用蓝图(输入编号或全名):"), false);
-                for (int i = 0; i < schematics.size(); i++) {
-                    String marker = schematics.get(i).equals(selectedSchematic) ? " §a← 已选" : "";
-                    client.player.sendMessage(Text.literal("§7  " + (i + 1) + ". §f" + schematics.get(i) + marker), false);
-                }
-            }
-        } else if (args.startsWith("choose ")) {
-            String input = args.substring(7).trim();
-            List<String> schematics = scanSchematics(client);
-            String targetName = null;
-
-            // Check if input is a number
-            try {
-                int idx = Integer.parseInt(input) - 1;
-                if (idx >= 0 && idx < schematics.size()) {
-                    targetName = schematics.get(idx);
-                } else {
-                    client.player.sendMessage(Text.literal("§c[AutoMiner] §f编号超出范围(1-" + schematics.size() + ")"), false);
-                    return;
-                }
-            } catch (NumberFormatException e) {
-                // Not a number, treat as filename
-                targetName = input;
-            }
-
-            if (targetName == null) return;
-            File schematicsDir = new File(client.runDirectory, "schematics");
-            SchematicReader reader = new SchematicReader();
-            if (reader.load(schematicsDir.getAbsolutePath() + "/" + targetName)) {
-                selectedSchematic = targetName;
-                client.player.sendMessage(Text.literal("§a[AutoMiner] §f已选择蓝图: " + targetName), false);
-                client.player.sendMessage(Text.literal("§e  名称: " + reader.getName()), false);
-                client.player.sendMessage(Text.literal("§e  尺寸: " + reader.getSize()[0] + "x" + reader.getSize()[1] + "x" + reader.getSize()[2] + ", " + reader.getTotalBlocks() + " 方块"), false);
-                String materials = reader.getMaterialSummary();
-                for (String line : materials.split("\n")) {
-                    client.player.sendMessage(Text.literal("§7  " + line), false);
-                }
-                client.player.sendMessage(Text.literal("§a  输入 §f/am start §a开始建造"), false);
-            } else {
-                client.player.sendMessage(Text.literal("§c[AutoMiner] §f无法加载蓝图: " + targetName), false);
-            }
-        } else if (args.equals("start") || args.equals("on")) {
-            autoMode = true;
-            busy = false;
-            llmCooldown = 0;
             String task;
             if (!selectedSchematic.isEmpty()) {
                 task = "Build: " + selectedSchematic;
@@ -373,6 +294,46 @@ public class AutoMinerMod implements ClientModInitializer {
     }
 
     /**
+     * Scan blocks around the player and return a compact summary for the LLM.
+     * Groups blocks by type, shows nearest instance coords and count.
+     */
+    private String scanNearbyBlocks(MinecraftClient client) {
+        if (client.player == null || client.world == null) return "unknown";
+        BlockPos p = client.player.getBlockPos();
+        int R = 5; // scan radius
+        Map<String, int[]> best = new java.util.LinkedHashMap<>(); // id -> [x,y,z,count]
+        for (int dx = -R; dx <= R; dx++) {
+            for (int dy = -1; dy <= R - 1; dy++) {
+                for (int dz = -R; dz <= R; dz++) {
+                    BlockPos bp = p.add(dx, dy, dz);
+                    String id = Registries.BLOCK.getId(client.world.getBlockState(bp).getBlock()).toString();
+                    if (id.equals("minecraft:air") || id.equals("minecraft:cave_air") || id.equals("minecraft:void_air")) continue;
+                    int[] v = best.get(id);
+                    if (v == null) {
+                        v = new int[]{dx, dy, dz, 1};
+                        best.put(id, v);
+                    } else {
+                        v[3]++;
+                        if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) <
+                                Math.abs(v[0]) + Math.abs(v[1]) + Math.abs(v[2])) {
+                            v[0] = dx; v[1] = dy; v[2] = dz;
+                        }
+                    }
+                }
+            }
+        }
+        if (best.isEmpty()) return "空";
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, int[]> e : best.entrySet()) {
+            String shortId = e.getKey().replace("minecraft:", "");
+            int[] v = e.getValue();
+            sb.append(shortId).append("(").append(v[3]).append("x,near:")
+              .append(v[0]).append(",").append(v[1]).append(",").append(v[2]).append(") ");
+        }
+        return sb.toString().trim();
+    }
+
+    /**
      * Build a compact state report for the LLM.
      */
     private String buildStateReport(MinecraftClient client) {
@@ -388,17 +349,19 @@ public class AutoMinerMod implements ClientModInitializer {
         String invSummary = inventoryManager.getInventorySummary(client);
         String schemInfo = availableSchematics.isEmpty() ? "" : " | Schematics: " + availableSchematics;
         String resultInfo = lastActionResult.isEmpty() ? "" : " | 上次动作: " + lastActionResult;
+        String nearbyInfo = scanNearbyBlocks(client);
 
         String report = String.format(
                 "Position: %.1f %.1f %.1f | Health: %.0f/%d | Hunger: %d/%d | " +
-                        "Dimension: %s | Held: %s%s | Task: %s | %s%s%s",
+                        "Dimension: %s | Held: %s%s | Task: %s | %s%s%s\n附近方块: %s",
                 player.getX(), player.getY(), player.getZ(),
                 player.getHealth(), (int) player.getMaxHealth(),
                 player.getHungerManager().getFoodLevel(), 20,
-                player.getWorld().getDimensionEntry().getIdAsString(),
+                client.world != null ? client.world.getDimension().toString() : "unknown",
                 heldItem, durability,
                 currentTask.isEmpty() ? "none" : currentTask,
-                invSummary, schemInfo, resultInfo
+                invSummary, schemInfo, resultInfo,
+                nearbyInfo
         );
 
         // Clear the result so it only appears once

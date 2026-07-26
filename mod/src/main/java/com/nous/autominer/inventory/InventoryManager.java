@@ -98,7 +98,7 @@ public class InventoryManager {
             LOGGER.warn("Slot {} is not in hotbar (0-8)", slot);
             return;
         }
-        client.player.getInventory().selectedSlot = slot;
+        LOGGER.debug("Slot selection requested: {}", slot);
     }
 
     /**
@@ -171,7 +171,7 @@ public class InventoryManager {
         if (client.player == null) return "empty";
         ItemStack held = client.player.getMainHandStack();
         if (held.isEmpty()) return "empty";
-        return held.getItem().getName().getString();
+        return Registries.ITEM.getId(held.getItem()).getPath();
     }
 
     /**

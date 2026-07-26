@@ -37,25 +37,15 @@ public class BlockPlacer {
 
         BlockPos placePos = new BlockPos(x, y, z);
 
-        // Find the block in inventory
-        int slot = findBlockInInventory(client, blockId);
+        // Only use hotbar items (slots 0-8)
+        int slot = findBlockInHotbar(client, blockId);
         if (slot == -1) {
-            LOGGER.warn("No '{}' found in inventory", blockId);
+            LOGGER.warn("No '{}' found in hotbar — please move to hotbar first", blockId);
             return false;
         }
 
-        // Select the slot
-        if (slot < 9) {
-            // Hotbar slot — just select it
-            client.player.getInventory().selectedSlot = slot;
-        } else {
-            // Inventory slot — need to swap to hotbar
-            // For simplicity, swap with current hotbar slot if not already selected
-            if (!swapToHotbar(client, slot)) {
-                LOGGER.warn("Could not swap item from slot {} to hotbar", slot);
-                return false;
-            }
-        }
+        // Slot always in hotbar (0-8), just log which slot to select
+        LOGGER.info("Use hotbar slot {} for {}", slot, blockId);
 
         // Build the hit result — place on top of the target position if air,
         // otherwise place against the block face at the target
@@ -87,59 +77,22 @@ public class BlockPlacer {
     }
 
     /**
-     * Search the player's inventory for a block matching the given ID.
-     *
-     * @param client  Minecraft client instance
-     * @param blockId Block ID (short or full identifier)
-     * @return Slot index, or -1 if not found
+     * Search the player's hotbar (slots 0-8) for a block matching the given ID.
      */
-    private int findBlockInInventory(MinecraftClient client, String blockId) {
+    private int findBlockInHotbar(MinecraftClient client, String blockId) {
         if (client.player == null) return -1;
 
-        // Normalize the blockId
         String fullId = blockId.contains(":") ? blockId : "minecraft:" + blockId;
-
         Identifier targetId = Identifier.tryParse(fullId);
         if (targetId == null) return -1;
 
         var inventory = client.player.getInventory();
-
-        // Search main inventory (slots 0-35)
-        for (int i = 0; i < inventory.size(); i++) {
+        for (int i = 0; i < 9; i++) {
             ItemStack stack = inventory.getStack(i);
             if (stack.isEmpty()) continue;
-
             Identifier itemId = Registries.ITEM.getId(stack.getItem());
-            if (itemId.equals(targetId)) {
-                return i;
-            }
+            if (itemId.equals(targetId)) return i;
         }
-
         return -1;
-    }
-
-    /**
-     * Swap an item from an inventory slot to the hotbar.
-     * This is a simplified approach — in survival, this would need
-     * to use a screen handler to move items properly.
-     *
-     * @param client   Minecraft client instance
-     * @param fromSlot The inventory slot to swap from
-     * @return true if swap succeeded (or item was already in hotbar)
-     */
-    private boolean swapToHotbar(MinecraftClient client, int fromSlot) {
-        if (client.player == null) return false;
-
-        // If it's already in the hotbar, just select it
-        if (fromSlot < 9) {
-            client.player.getInventory().selectedSlot = fromSlot;
-            return true;
-        }
-
-        // For survival mode without open inventory, we can't programmatically
-        // swap items. Instead, open inventory and swap, or just note limitation.
-        // For now, log a warning and try using the item directly.
-        LOGGER.warn("Item in slot {} is not in hotbar. Hotbar swapping requires open inventory.", fromSlot);
-        return false;
     }
 }

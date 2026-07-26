@@ -98,12 +98,16 @@ public class BlockBreaker {
     private Direction getDirectionTowards(MinecraftClient client, BlockPos target) {
         if (client.player == null) return Direction.UP;
 
-        Vec3d playerPos = client.player.getPos();
-        Vec3d blockCenter = Vec3d.ofCenter(target);
+        double playerX = client.player.getX();
+        double playerY = client.player.getY();
+        double playerZ = client.player.getZ();
+        double blockX = target.getX() + 0.5;
+        double blockY = target.getY() + 0.5;
+        double blockZ = target.getZ() + 0.5;
 
-        double dx = blockCenter.x - playerPos.x;
-        double dy = blockCenter.y - (playerPos.y + client.player.getEyeHeight(client.player.getPose()));
-        double dz = blockCenter.z - playerPos.z;
+        double dx = blockX - playerX;
+        double dy = blockY - (playerY + client.player.getEyeHeight(client.player.getPose()));
+        double dz = blockZ - playerZ;
 
         // Pick the dominant axis
         double absDx = Math.abs(dx);

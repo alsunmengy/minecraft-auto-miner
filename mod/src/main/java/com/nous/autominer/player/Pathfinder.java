@@ -1,6 +1,7 @@
 package com.nous.autominer.player;
 
 import net.minecraft.block.BlockState;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.world.World;
 import net.minecraft.util.math.BlockPos;
@@ -43,7 +44,9 @@ public class Pathfinder {
             return;
         }
 
-        List<BlockPos> calculatedPath = aStar(player.getWorld(), start, target);
+        // Get world from MinecraftClient
+        World world = MinecraftClient.getInstance().world;
+        List<BlockPos> calculatedPath = aStar(world, start, target);
         if (calculatedPath == null || calculatedPath.isEmpty()) {
             LOGGER.warn("No path found from {} to {}", start, target);
             active = false;
@@ -75,7 +78,11 @@ public class Pathfinder {
         }
 
         // Check if we've arrived at the current waypoint
-        double distance = player.getPos().distanceTo(Vec3d.ofCenter(currentTarget));
+        double cx = currentTarget.getX() + 0.5;
+        double cz = currentTarget.getZ() + 0.5;
+        double distance = Math.sqrt(
+            (cx - player.getX()) * (cx - player.getX()) +
+            (cz - player.getZ()) * (cz - player.getZ()));
 
         if (distance <= 1.5) {
             currentTarget = path.poll();
