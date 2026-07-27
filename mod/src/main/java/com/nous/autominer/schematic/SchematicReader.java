@@ -53,50 +53,53 @@ public class SchematicReader {
             NbtCompound root = NbtIo.readCompressed(file.toPath(), NbtSizeTracker.ofUnlimitedBytes());
 
             // Metadata
-            if (root.contains("Metadata")) {
-                NbtCompound meta = root.getCompound("Metadata").get();
-                name = meta.getString("Name").get();
-                author = meta.getString("Author").get();
-                description = meta.getString("Description").get();
+            NbtCompound meta = root.getCompound("Metadata").orElse(null);
+            if (meta != null) {
+                name = meta.getString("Name").orElse(file.getName());
+                author = meta.getString("Author").orElse("");
+                description = meta.getString("Description").orElse("");
             }
 
             // Regions
-            if (!root.contains("Regions")) {
+            NbtCompound regions = root.getCompound("Regions").orElse(null);
+            if (regions == null || regions.getKeys().isEmpty()) {
                 LOGGER.warn("No regions in .litematic file");
                 return false;
             }
 
-            NbtCompound regions = root.getCompound("Regions").get();
             // Process the first region
             String firstRegion = regions.getKeys().iterator().next();
-            NbtCompound region = regions.getCompound(firstRegion).get();
+            NbtCompound region = regions.getCompound(firstRegion).orElse(null);
+            if (region == null) {
+                LOGGER.warn("Region '{}' is empty", firstRegion);
+                return false;
+            }
 
             // Size
-            size = region.getIntArray("Size").get();
+            size = region.getIntArray("Size").orElse(new int[]{0, 0, 0});
             if (size.length < 3) {
                 LOGGER.warn("Invalid size in .litematic");
                 return false;
             }
 
             // Position
-            if (region.contains("Position")) {
-                position = region.getIntArray("Position").get();
-            }
+            position = region.getIntArray("Position").orElse(new int[]{0, 0, 0});
 
             // Palette — read mappings
             palette = new ArrayList<>();
-            NbtCompound paletteTag = region.getCompound("Palette").get();
-            for (String blockName : paletteTag.getKeys()) {
-                // The palette maps block_name → index, we need to store it at the right position
-                int index = paletteTag.getInt(blockName).get();
-                while (palette.size() <= index) {
-                    palette.add(null);
+            NbtCompound paletteTag = region.getCompound("Palette").orElse(null);
+            if (paletteTag != null) {
+                for (String blockName : paletteTag.getKeys()) {
+                    int index = paletteTag.getInt(blockName).orElse(0);
+                    while (palette.size() <= index) {
+                        palette.add(null);
+                    }
+                    palette.set(index, blockName);
                 }
-                palette.set(index, blockName);
             }
 
             // BlockStates
-            blockStates = region.getLongArray("BlockStates").get();
+            blockStates = region.getLongArray("BlockStates").orElse(new long[0]);
 
             loaded = true;
             LOGGER.info("Loaded schematic '{}' by {} ({}x{}x{}, {} unique blocks)",
