@@ -88,7 +88,7 @@ public class LLMClient {
         try {
             JsonObject body = new JsonObject();
             body.addProperty("model", model);
-            body.addProperty("max_tokens", 120);
+            body.addProperty("max_tokens", 500);
             body.addProperty("temperature", 0.3);
 
             JsonArray messages = new JsonArray();
@@ -134,6 +134,9 @@ public class LLMClient {
                     .get("message").getAsJsonObject()
                     .get("content").getAsString()
                     .trim();
+            if (content.isEmpty()) {
+                LOGGER.warn("LLM returned empty content. Full response: {}", response.body());
+            }
 
             return content;
 
