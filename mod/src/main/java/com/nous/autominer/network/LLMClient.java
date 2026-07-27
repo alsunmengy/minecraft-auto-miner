@@ -147,6 +147,7 @@ public class LLMClient {
 
     public String getApiUrl() { return apiUrl; }
     public String getModel() { return model; }
+    public String getApiKey() { return apiKey; }
     public boolean isConfigured() { return apiKey != null && !apiKey.isEmpty(); }
     public void setApiKey(String key) { this.apiKey = key; }
     public void setModel(String m) { this.model = m; }

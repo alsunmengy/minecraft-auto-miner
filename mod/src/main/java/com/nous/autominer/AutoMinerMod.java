@@ -25,6 +25,9 @@ import com.nous.autominer.inventory.InventoryManager;
 import com.nous.autominer.schematic.SchematicReader;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +59,7 @@ public class AutoMinerMod implements ClientModInitializer {
     private static String lastInstruction = "";
     private static boolean wasBusy = false;
     private static String selectedSchematic = "";
+    private static Path configPath = null;
 
     @Override
     public void onInitializeClient() {
@@ -69,11 +73,26 @@ public class AutoMinerMod implements ClientModInitializer {
         chatHandler = new ChatCommandHandler();
         inventoryManager = new InventoryManager();
 
-        // Read LLM config from env
-        String apiUrl = System.getenv().getOrDefault("LLM_API_URL",
-                "https://api.deepseek.com/v1/chat/completions");
+        // Read LLM config from env, then persistent config file
+        String apiUrl = System.getenv().getOrDefault("LLM_API_URL", "");
         String apiKey = System.getenv().getOrDefault("LLM_API_KEY", "");
-        String model = System.getenv().getOrDefault("LLM_MODEL", "deepseek-v4-flash");
+        String model = System.getenv().getOrDefault("LLM_MODEL", "");
+
+        // Load saved config file if env vars not set
+        configPath = new File(MinecraftClient.getInstance().runDirectory, "config/auto-miner.json").toPath();
+        if ((apiKey.isEmpty() || model.isEmpty()) && Files.exists(configPath)) {
+            try {
+                var config = new com.google.gson.Gson().fromJson(Files.readString(configPath), Map.class);
+                if (apiKey.isEmpty() && config.containsKey("apiKey")) apiKey = (String) config.get("apiKey");
+                if (model.isEmpty() && config.containsKey("model")) model = (String) config.get("model");
+                if (apiUrl.isEmpty() && config.containsKey("apiUrl")) apiUrl = (String) config.get("apiUrl");
+                LOGGER.info("Loaded config from {}", configPath);
+            } catch (Exception e) {
+                LOGGER.warn("Failed to load config: {}", e.getMessage());
+            }
+        }
+        if (apiUrl.isEmpty()) apiUrl = "https://api.deepseek.com/v1/chat/completions";
+        if (model.isEmpty()) model = "deepseek-v4-flash";
         llmClient = new LLMClient(apiUrl, apiKey, model);
 
         initialized = true;
@@ -333,14 +352,17 @@ public class AutoMinerMod implements ClientModInitializer {
         } else if (args.startsWith("api ")) {
             String key = args.substring(4).trim();
             llmClient.setApiKey(key);
+            saveConfig();
             client.player.sendMessage(Text.literal("§a[AutoMiner] §fAPI Key 已设置"), false);
         } else if (args.startsWith("model ")) {
             String model = args.substring(6).trim();
             llmClient.setModel(model);
+            saveConfig();
             client.player.sendMessage(Text.literal("§a[AutoMiner] §f模型已改为: " + model), false);
         } else if (args.startsWith("url ")) {
             String endpoint = args.substring(4).trim();
             llmClient.setApiUrl(endpoint);
+            saveConfig();
             client.player.sendMessage(Text.literal("§a[AutoMiner] §fAPI地址已改为: " + endpoint), false);
         } else {
             client.player.sendMessage(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | api <key> | model <name> | url <url> | schematics | choose <蓝图> | task <描述>"), false);
@@ -355,6 +377,24 @@ public class AutoMinerMod implements ClientModInitializer {
         List<String> schematics = SchematicReader.scanSchematicsDir(schematicsDir.getAbsolutePath());
         availableSchematics = String.join(", ", schematics);
         return schematics;
+    }
+
+    /**
+     * Save current LLM config to disk.
+     */
+    private void saveConfig() {
+        if (configPath == null) return;
+        try {
+            var config = new java.util.LinkedHashMap<String, String>();
+            config.put("apiKey", llmClient.getApiKey() != null ? llmClient.getApiKey() : "");
+            config.put("model", llmClient.getModel());
+            config.put("apiUrl", llmClient.getApiUrl());
+            Files.createDirectories(configPath.getParent());
+            Files.writeString(configPath, new com.google.gson.Gson().toJson(config));
+            LOGGER.info("Config saved to {}", configPath);
+        } catch (IOException e) {
+            LOGGER.warn("Failed to save config: {}", e.getMessage());
+        }
     }
 
     /**

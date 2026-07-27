@@ -80,6 +80,12 @@ public class SchematicReader {
 
             // Size
             size = region.getIntArray("Size").orElse(new int[]{0, 0, 0});
+            if (size[0] == 0 && size[1] == 0 && size[2] == 0) {
+                // Size might be stored differently — try getInt for each dimension
+                size[0] = Math.max(size[0], region.getInt("x").orElse(0));
+                size[1] = Math.max(size[1], region.getInt("y").orElse(0));
+                size[2] = Math.max(size[2], region.getInt("z").orElse(0));
+            }
             LOGGER.info("Size: {}x{}x{}", size[0], size[1], size[2]);
             if (size.length < 3) {
                 LOGGER.warn("Invalid size in .litematic");
@@ -89,10 +95,13 @@ public class SchematicReader {
             // Position
             position = region.getIntArray("Position").orElse(new int[]{0, 0, 0});
 
-            // Palette — read mappings
+            // Palette — read mappings (old format: "Palette", new format: "BlockStatePalette")
             palette = new ArrayList<>();
-            NbtCompound paletteTag = region.getCompound("Palette").orElse(null);
+            NbtCompound paletteTag = region.getCompound("BlockStatePalette").orElse(
+                    region.getCompound("Palette").orElse(null));
             if (paletteTag != null) {
+                LOGGER.info("Palette has {} entries, keys sample: {}",
+                        paletteTag.getSize(), paletteTag.getKeys().stream().limit(3).toList());
                 for (String blockName : paletteTag.getKeys()) {
                     int index = paletteTag.getInt(blockName).orElse(0);
                     while (palette.size() <= index) {
@@ -100,6 +109,8 @@ public class SchematicReader {
                     }
                     palette.set(index, blockName);
                 }
+            } else {
+                LOGGER.warn("No palette found (tried Palette and BlockStatePalette)");
             }
 
             // BlockStates
