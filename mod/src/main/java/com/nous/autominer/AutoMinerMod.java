@@ -404,10 +404,10 @@ public class AutoMinerMod implements ClientModInitializer {
         if (client.player == null || client.world == null) return;
 
         String state = buildStateReport(client);
+        LOGGER.info("Asking LLM with task: {}", currentTask.isEmpty() ? "none" : currentTask);
         String instruction = llmClient.ask(currentTask, state);
+        LOGGER.info("LLM response: {}", instruction != null ? instruction : "(null/error)");
         if (instruction == null || instruction.isBlank()) return;
-
-        LOGGER.debug("LLM instruction: {}", instruction);
         executeInstruction(client, instruction);
     }
 
