@@ -86,23 +86,12 @@ public class SchematicReader {
             LOGGER.info("Region Size tag exists: {}, Palette exists: {}, BlockStates exists: {}",
                     region.contains("Size"), region.contains("Palette"), region.contains("BlockStates"));
 
-            // Size
-            size = region.getIntArray("Size").orElse(null);
-            if (size == null || (size[0] == 0 && size[1] == 0 && size[2] == 0)) {
-                if (size == null) size = new int[]{0, 0, 0};
-                // Size might be a list of ints, not int array
-                var sizeList = region.getList("Size").orElse(null);
-                if (sizeList != null && sizeList.size() >= 3) {
-                    size[0] = sizeList.getInt(0).orElse(0);
-                    size[1] = sizeList.getInt(1).orElse(0);
-                    size[2] = sizeList.getInt(2).orElse(0);
-                }
-                // Also try individual x,y,z int tags
-                size[0] = Math.max(size[0], region.getInt("x").orElse(0));
-                size[1] = Math.max(size[1], region.getInt("y").orElse(0));
-                size[2] = Math.max(size[2], region.getInt("z").orElse(0));
+            // Size — region Size overrides metadata EnclosingSize
+            var regSize = region.getIntArray("Size").orElse(null);
+            if (regSize != null && regSize.length >= 3 && (regSize[0] > 0 || regSize[1] > 0 || regSize[2] > 0)) {
+                size = regSize; // Region has valid size, use it
             }
-            LOGGER.info("Size: {}x{}x{}", size[0], size[1], size[2]);
+            // else keep what we got from Metadata.EnclosingSize or fallbacks
             if (size.length < 3) {
                 LOGGER.warn("Invalid size in .litematic");
                 return false;
