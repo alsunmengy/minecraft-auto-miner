@@ -261,6 +261,48 @@ public class AutoMinerMod implements ClientModInitializer {
             client.player.sendMessage(Text.literal(String.format(
                     "§e[AutoMiner] §f状态: %s | 任务: %s | LLM: %s | 模型: %s | 已选蓝图: %s",
                     status, task, llmOk, llmClient.getModel(), sel)), false);
+        } else if (args.equals("schematics")) {
+            List<String> schematics = scanSchematics(client);
+            if (schematics.isEmpty()) {
+                client.player.sendMessage(Text.literal("§e[AutoMiner] §f没有找到 .litematic 蓝图文件"), false);
+            } else {
+                client.player.sendMessage(Text.literal("§e[AutoMiner] §f可用蓝图(输入编号或全名):"), false);
+                for (int i = 0; i < schematics.size(); i++) {
+                    String marker = schematics.get(i).equals(selectedSchematic) ? " §a← 已选" : "";
+                    client.player.sendMessage(Text.literal("§7  " + (i + 1) + ". §f" + schematics.get(i) + marker), false);
+                }
+            }
+        } else if (args.startsWith("choose ")) {
+            String input = args.substring(7).trim();
+            List<String> schematics = scanSchematics(client);
+            String targetName = null;
+            try {
+                int idx = Integer.parseInt(input) - 1;
+                if (idx >= 0 && idx < schematics.size()) {
+                    targetName = schematics.get(idx);
+                } else {
+                    client.player.sendMessage(Text.literal("§c[AutoMiner] §f编号超出范围(1-" + schematics.size() + ")"), false);
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                targetName = input;
+            }
+            if (targetName == null) return;
+            File schematicsDir = new File(client.runDirectory, "schematics");
+            SchematicReader reader = new SchematicReader();
+            if (reader.load(schematicsDir.getAbsolutePath() + "/" + targetName)) {
+                selectedSchematic = targetName;
+                currentTask = "Build: " + targetName;
+                client.player.sendMessage(Text.literal("§a[AutoMiner] §f已选择蓝图: " + targetName), false);
+                client.player.sendMessage(Text.literal("§e  尺寸: " + reader.getSize()[0] + "x" + reader.getSize()[1] + "x" + reader.getSize()[2] + ", " + reader.getTotalBlocks() + " 方块"), false);
+                String materials = reader.getMaterialSummary();
+                for (String line : materials.split("\n")) {
+                    client.player.sendMessage(Text.literal("§7  " + line), false);
+                }
+                client.player.sendMessage(Text.literal("§a  输入 §f/am start §a开始建造"), false);
+            } else {
+                client.player.sendMessage(Text.literal("§c[AutoMiner] §f无法加载蓝图: " + targetName), false);
+            }
         } else if (args.startsWith("task ")) {
             currentTask = args.substring(5).trim();
             client.player.sendMessage(Text.literal("§a[AutoMiner] §f任务已设置: " + currentTask), false);
