@@ -156,7 +156,7 @@ public class AutoMinerMod implements ClientModInitializer {
 
             dispatcher.register(ClientCommandManager.literal("am")
                     .executes(context -> {
-                        context.getSource().sendFeedback(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <蓝图> | task <描述>"));
+                        context.getSource().sendFeedback(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | api <key> | model <name> | url <endpoint> | schematics | choose <蓝图> | task <描述>"));
                         return 1;
                     })
                     .then(ClientCommandManager.literal("start")
@@ -204,6 +204,30 @@ public class AutoMinerMod implements ClientModInitializer {
                                     .executes(context -> {
                                         String desc = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "description");
                                         handleCommand(MinecraftClient.getInstance(), "task " + desc);
+                                        return 1;
+                                    }))
+                    )
+                    .then(ClientCommandManager.literal("api")
+                            .then(ClientCommandManager.argument("key", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .executes(context -> {
+                                        String key = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "key");
+                                        handleCommand(MinecraftClient.getInstance(), "api " + key);
+                                        return 1;
+                                    }))
+                    )
+                    .then(ClientCommandManager.literal("model")
+                            .then(ClientCommandManager.argument("name", com.mojang.brigadier.arguments.StringArgumentType.word())
+                                    .executes(context -> {
+                                        String name = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name");
+                                        handleCommand(MinecraftClient.getInstance(), "model " + name);
+                                        return 1;
+                                    }))
+                    )
+                    .then(ClientCommandManager.literal("url")
+                            .then(ClientCommandManager.argument("endpoint", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                    .executes(context -> {
+                                        String url = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "endpoint");
+                                        handleCommand(MinecraftClient.getInstance(), "url " + url);
                                         return 1;
                                     }))
                     )
@@ -306,8 +330,20 @@ public class AutoMinerMod implements ClientModInitializer {
         } else if (args.startsWith("task ")) {
             currentTask = args.substring(5).trim();
             client.player.sendMessage(Text.literal("§a[AutoMiner] §f任务已设置: " + currentTask), false);
+        } else if (args.startsWith("api ")) {
+            String key = args.substring(4).trim();
+            llmClient.setApiKey(key);
+            client.player.sendMessage(Text.literal("§a[AutoMiner] §fAPI Key 已设置"), false);
+        } else if (args.startsWith("model ")) {
+            String model = args.substring(6).trim();
+            llmClient.setModel(model);
+            client.player.sendMessage(Text.literal("§a[AutoMiner] §f模型已改为: " + model), false);
+        } else if (args.startsWith("url ")) {
+            String endpoint = args.substring(4).trim();
+            llmClient.setApiUrl(endpoint);
+            client.player.sendMessage(Text.literal("§a[AutoMiner] §fAPI地址已改为: " + endpoint), false);
         } else {
-            client.player.sendMessage(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | schematics | choose <编号/蓝图名> | task <描述>"), false);
+            client.player.sendMessage(Text.literal("§e[AutoMiner] §f命令: start [蓝图] | stop | status | api <key> | model <name> | url <url> | schematics | choose <蓝图> | task <描述>"), false);
         }
     }
 

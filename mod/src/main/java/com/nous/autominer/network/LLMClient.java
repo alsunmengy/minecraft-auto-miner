@@ -21,9 +21,9 @@ import java.time.Duration;
 public class LLMClient {
     private static final Logger LOGGER = LoggerFactory.getLogger("auto-miner-llm");
 
-    private final String apiUrl;
-    private final String apiKey;
-    private final String model;
+    private String apiUrl;
+    private String apiKey;
+    private String model;
     private final HttpClient httpClient;
     private final Gson gson;
 
@@ -148,4 +148,7 @@ public class LLMClient {
     public String getApiUrl() { return apiUrl; }
     public String getModel() { return model; }
     public boolean isConfigured() { return apiKey != null && !apiKey.isEmpty(); }
+    public void setApiKey(String key) { this.apiKey = key; }
+    public void setModel(String m) { this.model = m; }
+    public void setApiUrl(String url) { this.apiUrl = url; }
 }
