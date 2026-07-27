@@ -74,9 +74,13 @@ public class SchematicReader {
                 LOGGER.warn("Region '{}' is empty", firstRegion);
                 return false;
             }
+            LOGGER.info("Region keys: {}", region.getKeys());
+            LOGGER.info("Region Size tag exists: {}, Palette exists: {}, BlockStates exists: {}",
+                    region.contains("Size"), region.contains("Palette"), region.contains("BlockStates"));
 
             // Size
             size = region.getIntArray("Size").orElse(new int[]{0, 0, 0});
+            LOGGER.info("Size: {}x{}x{}", size[0], size[1], size[2]);
             if (size.length < 3) {
                 LOGGER.warn("Invalid size in .litematic");
                 return false;
