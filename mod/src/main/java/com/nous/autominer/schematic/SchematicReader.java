@@ -58,6 +58,14 @@ public class SchematicReader {
                 name = meta.getString("Name").orElse(file.getName());
                 author = meta.getString("Author").orElse("");
                 description = meta.getString("Description").orElse("");
+                // Get size from Metadata.EnclosingSize
+                var encS = meta.getCompound("EnclosingSize");
+                if (encS.isPresent()) {
+                    var es = encS.get();
+                    size[0] = es.getInt("x").orElse(0);
+                    size[1] = es.getInt("y").orElse(0);
+                    size[2] = es.getInt("z").orElse(0);
+                }
             }
 
             // Regions
@@ -100,8 +108,20 @@ public class SchematicReader {
                 return false;
             }
 
-            // Position
-            position = region.getIntArray("Position").orElse(new int[]{0, 0, 0});
+            // Position (new format: compound {x,y,z}, old: int[])
+            position = region.getIntArray("Position").orElse(null);
+            if (position == null || position.length == 0) {
+                var posC = region.getCompound("Position").orElse(null);
+                if (posC != null) {
+                    position = new int[]{
+                        posC.getInt("x").orElse(0),
+                        posC.getInt("y").orElse(0),
+                        posC.getInt("z").orElse(0)
+                    };
+                } else {
+                    position = new int[]{0, 0, 0};
+                }
+            }
 
             // Palette — read mappings (new format: list, old format: compound)
             palette = new ArrayList<>();
