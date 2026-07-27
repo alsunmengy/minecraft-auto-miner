@@ -79,9 +79,17 @@ public class SchematicReader {
                     region.contains("Size"), region.contains("Palette"), region.contains("BlockStates"));
 
             // Size
-            size = region.getIntArray("Size").orElse(new int[]{0, 0, 0});
-            if (size[0] == 0 && size[1] == 0 && size[2] == 0) {
-                // Size might be stored differently — try getInt for each dimension
+            size = region.getIntArray("Size").orElse(null);
+            if (size == null || (size[0] == 0 && size[1] == 0 && size[2] == 0)) {
+                if (size == null) size = new int[]{0, 0, 0};
+                // Size might be a list of ints, not int array
+                var sizeList = region.getList("Size").orElse(null);
+                if (sizeList != null && sizeList.size() >= 3) {
+                    size[0] = sizeList.getInt(0).orElse(0);
+                    size[1] = sizeList.getInt(1).orElse(0);
+                    size[2] = sizeList.getInt(2).orElse(0);
+                }
+                // Also try individual x,y,z int tags
                 size[0] = Math.max(size[0], region.getInt("x").orElse(0));
                 size[1] = Math.max(size[1], region.getInt("y").orElse(0));
                 size[2] = Math.max(size[2], region.getInt("z").orElse(0));
@@ -95,23 +103,33 @@ public class SchematicReader {
             // Position
             position = region.getIntArray("Position").orElse(new int[]{0, 0, 0});
 
-            // Palette — read mappings (old format: "Palette", new format: "BlockStatePalette")
+            // Palette — read mappings (new format: list, old format: compound)
             palette = new ArrayList<>();
-            NbtCompound paletteTag = region.getCompound("BlockStatePalette").orElse(
-                    region.getCompound("Palette").orElse(null));
-            if (paletteTag != null) {
-                LOGGER.info("Palette has {} entries, keys sample: {}",
-                        paletteTag.getSize(), paletteTag.getKeys().stream().limit(3).toList());
-                for (String blockName : paletteTag.getKeys()) {
-                    int index = paletteTag.getInt(blockName).orElse(0);
-                    while (palette.size() <= index) {
-                        palette.add(null);
+            // Try new format first: BlockStatePalette is a LIST of compounds {Name: "minecraft:stone"}
+            var paletteList = region.getList("BlockStatePalette").orElse(null);
+            if (paletteList != null && paletteList.size() > 0) {
+                LOGGER.info("BlockStatePalette list has {} entries", paletteList.size());
+                for (int i = 0; i < paletteList.size(); i++) {
+                    var entry = paletteList.getCompound(i).orElse(null);
+                    if (entry != null) {
+                        palette.add(entry.getString("Name").orElse("minecraft:air"));
+                    } else {
+                        palette.add("minecraft:air");
                     }
-                    palette.set(index, blockName);
                 }
             } else {
-                LOGGER.warn("No palette found (tried Palette and BlockStatePalette)");
+                // Old format: Palette is a compound block_name→index
+                NbtCompound compPalette = region.getCompound("BlockStatePalette").orElse(
+                        region.getCompound("Palette").orElse(null));
+                if (compPalette != null) {
+                    for (String blockName : compPalette.getKeys()) {
+                        int index = compPalette.getInt(blockName).orElse(0);
+                        while (palette.size() <= index) palette.add(null);
+                        palette.set(index, blockName);
+                    }
+                }
             }
+            LOGGER.info("Palette parsed: {} unique blocks", palette.size());
 
             // BlockStates
             blockStates = region.getLongArray("BlockStates").orElse(new long[0]);
