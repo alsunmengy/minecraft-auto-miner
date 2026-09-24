@@ -1,4 +1,5 @@
 # Minecraft Auto Miner
+[![GitHub followers](https://img.shields.io/github/followers/alsunmengy?style=social&label=Follow)](https://github.com/alsunmengy)
 
 一个客户端 Fabric Mod，自动在生存服务器中挖矿、建造、发展。Mod 直接通过 HTTP 调用 DeepSeek/MiMo 等 AI 模型做决策，不需要 Python 协调器，零网络穿透需求。
 
